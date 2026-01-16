@@ -1,0 +1,111 @@
+plugins {
+  id 'java'
+  id 'org.springframework.boot' version '3.5.6'
+  id 'io.spring.dependency-management' version '1.1.7'
+  id 'jacoco'
+  id 'checkstyle'
+  id 'org.sonarqube' version '3.3'
+}
+
+group = 'io.kuberocketci'
+version = '0.0.1-SNAPSHOT'
+description = 'KubeRocketCI demo project for Spring Boot with Gradle'
+
+java {
+  toolchain {
+    languageVersion = JavaLanguageVersion.of(17)
+  }
+}
+
+repositories {
+  mavenCentral()
+}
+
+dependencies {
+  implementation 'org.springframework.boot:spring-boot-starter-web'
+  testImplementation 'org.springframework.boot:spring-boot-starter-test'
+  testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+// Disable plain JAR generation - only build the executable Spring Boot JAR
+tasks.named('jar') {
+  enabled = false
+}
+
+// Test configuration
+tasks.named('test') {
+  useJUnitPlatform()
+  finalizedBy jacocoTestReport
+}
+
+// JaCoCo configuration for code coverage
+jacoco {
+  toolVersion = "0.8.12"
+}
+
+jacocoTestReport {
+  dependsOn test
+  reports {
+    xml.required = true
+    html.required = true
+    csv.required = false
+  }
+  executionData.setFrom(fileTree(dir: 'build/jacoco', include: '**/*.exec'))
+  afterEvaluate {
+    classDirectories.setFrom(files(classDirectories.files.collect {
+      fileTree(dir: it, exclude: [
+        // Exclude patterns for generated or boilerplate code
+        // '**/DemoApplication.class'  // Now included with proper test coverage
+      ])
+    }))
+  }
+  finalizedBy jacocoTestCoverageVerification
+}
+
+jacocoTestCoverageVerification {
+  dependsOn jacocoTestReport
+  violationRules {
+    rule {
+      limit {
+        counter = 'LINE'
+        value = 'COVEREDRATIO'
+        minimum = 0.80  // Higher threshold (official uses 0.30)
+      }
+    }
+  }
+  afterEvaluate {
+    classDirectories.setFrom(files(classDirectories.files.collect {
+      fileTree(dir: it, exclude: [
+        // Exclude patterns for generated or boilerplate code
+        // '**/DemoApplication.class'  // Now included with proper test coverage
+      ])
+    }))
+  }
+}
+
+// Checkstyle configuration for code quality
+checkstyle {
+  toolVersion = '10.20.2'
+  configFile = rootProject.file('config/checkstyle/checkstyle.xml')
+  maxWarnings = 100  // Allow warnings for demo
+  maxErrors = 0
+  ignoreFailures = false  // Fail on errors (official uses true)
+}
+
+tasks.withType(Checkstyle) {
+  reports {
+    xml.required = true
+    html.required = true
+  }
+}
+
+check {
+  dependsOn jacocoTestCoverageVerification
+}
+
+// SonarQube configuration for code quality analysis
+sonarqube {
+  properties {
+    property 'sonar.coverage.jacoco.xmlReportPaths', "${buildDir}/reports/jacoco/test/jacocoTestReport.xml"
+  }
+}
